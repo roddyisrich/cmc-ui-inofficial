@@ -1,306 +1,95 @@
-import {
-  PublicKey,
-  publicKey,
-  Umi,
-} from "@metaplex-foundation/umi";
-import { DigitalAssetWithToken, JsonMetadata } from "@metaplex-foundation/mpl-token-metadata";
-import dynamic from "next/dynamic";
-import { Dispatch, SetStateAction, useEffect, useMemo, useState } from "react";
-import { useUmi } from "../utils/useUmi";
-import { fetchCandyMachine, safeFetchCandyGuard, CandyGuard, CandyMachine } from "@metaplex-foundation/mpl-core-candy-machine"
-import styles from "../styles/Home.module.css";
-import { guardChecker } from "../utils/checkAllowed";
-import { Center, Card, CardHeader, CardBody, StackDivider, Heading, Stack, useToast, Text, Skeleton, useDisclosure, Button, Modal, ModalBody, ModalCloseButton, ModalContent, Image, ModalHeader, ModalOverlay, Box, Divider, VStack, Flex } from '@chakra-ui/react';
-import { ButtonList } from "../components/mintButton";
-import { DasApiAssetAndAssetMintLimit, GuardReturn } from "../utils/checkerHelper";
-import { ShowNft } from "../components/showNft";
-import { InitializeModal } from "../components/initializeModal";
-import { image, headerText } from "../settings";
-import { useSolanaTime } from "@/utils/SolanaTimeContext";
-
-const WalletMultiButtonDynamic = dynamic(
-  async () =>
-    (await import("@solana/wallet-adapter-react-ui")).WalletMultiButton,
-  { ssr: false }
-);
-
-const useCandyMachine = (
-  umi: Umi,
-  candyMachineId: string,
-  checkEligibility: boolean,
-  setCheckEligibility: Dispatch<SetStateAction<boolean>>,
-  firstRun: boolean,
-  setfirstRun: Dispatch<SetStateAction<boolean>>
-) => {
-  const [candyMachine, setCandyMachine] = useState<CandyMachine>();
-  const [candyGuard, setCandyGuard] = useState<CandyGuard>();
-  const toast = useToast();
-
-
-  useEffect(() => {
-    (async () => {
-      if (checkEligibility) {
-        if (!candyMachineId) {
-          console.error("No candy machine in .env!");
-          if (!toast.isActive("no-cm")) {
-            toast({
-              id: "no-cm",
-              title: "No candy machine in .env!",
-              description: "Add your candy machine address to the .env file!",
-              status: "error",
-              duration: 999999,
-              isClosable: true,
-            });
-          }
-          return;
-        }
-
-        let candyMachine;
-        try {
-          candyMachine = await fetchCandyMachine(umi, publicKey(candyMachineId));
-        } catch (e) {
-          console.error(e);
-          toast({
-            id: "no-cm-found",
-            title: "The CM from .env is invalid",
-            description: "Are you using the correct environment?",
-            status: "error",
-            duration: 999999,
-            isClosable: true,
-          });
-        }
-        setCandyMachine(candyMachine);
-        if (!candyMachine) {
-          return;
-        }
-        let candyGuard;
-        try {
-          candyGuard = await safeFetchCandyGuard(umi, candyMachine.mintAuthority);
-        } catch (e) {
-          console.error(e);
-          toast({
-            id: "no-guard-found",
-            title: "No Candy Guard found!",
-            description: "Do you have one assigned?",
-            status: "error",
-            duration: 999999,
-            isClosable: true,
-          });
-        }
-        if (!candyGuard) {
-          return;
-        }
-        setCandyGuard(candyGuard);
-        if (firstRun){
-          setfirstRun(false)
-        }
-      }
-    })();
-  }, [umi, checkEligibility]);
-
-  return { candyMachine, candyGuard };
-
-};
-
+import Head from "next/head";
+import Image from "next/image";
 
 export default function Home() {
-  const umi = useUmi();
-  const solanaTime = useSolanaTime();
-  const toast = useToast();
-  const { isOpen: isShowNftOpen, onOpen: onShowNftOpen, onClose: onShowNftClose } = useDisclosure();
-  const { isOpen: isInitializerOpen, onOpen: onInitializerOpen, onClose: onInitializerClose } = useDisclosure();
-  const [mintsCreated, setMintsCreated] = useState<{ mint: PublicKey, offChainMetadata: JsonMetadata | undefined }[] | undefined>();
-  const [isAllowed, setIsAllowed] = useState<boolean>(false);
-  const [loading, setLoading] = useState(true);
-  const [ownedTokens, setOwnedTokens] = useState<DigitalAssetWithToken[]>();
-  const [ownedCoreAssets, setOwnedCoreAssets] = useState<DasApiAssetAndAssetMintLimit[]>();
-
-  const [guards, setGuards] = useState<GuardReturn[]>([
-    { label: "startDefault", allowed: false, maxAmount: 0 },
-  ]);
-  const [firstRun, setFirstRun] = useState(true);
-  const [checkEligibility, setCheckEligibility] = useState<boolean>(true);
-
-
-  if (!process.env.NEXT_PUBLIC_CANDY_MACHINE_ID) {
-    console.error("No candy machine in .env!")
-    if (!toast.isActive('no-cm')) {
-      toast({
-        id: 'no-cm',
-        title: 'No candy machine in .env!',
-        description: "Add your candy machine address to the .env file!",
-        status: 'error',
-        duration: 999999,
-        isClosable: true,
-      })
-    }
-  }
-  const candyMachineId: PublicKey = useMemo(() => {
-    if (process.env.NEXT_PUBLIC_CANDY_MACHINE_ID) {
-      return publicKey(process.env.NEXT_PUBLIC_CANDY_MACHINE_ID);
-    } else {
-      console.error(`NO CANDY MACHINE IN .env FILE DEFINED!`);
-      toast({
-        id: 'no-cm',
-        title: 'No candy machine in .env!',
-        description: "Add your candy machine address to the .env file!",
-        status: 'error',
-        duration: 999999,
-        isClosable: true,
-      })
-      return publicKey("11111111111111111111111111111111");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const { candyMachine, candyGuard } = useCandyMachine(umi, candyMachineId, checkEligibility, setCheckEligibility, firstRun, setFirstRun);
-
-  useEffect(() => {
-    const checkEligibilityFunc = async () => {
-      if (!candyMachine || !candyGuard || !checkEligibility || isShowNftOpen) {
-        return;
-      }
-      setFirstRun(false);
-      
-      const { guardReturn, ownedTokens, ownedCoreAssets } = await guardChecker(
-        umi, candyGuard, candyMachine, solanaTime
-      );
-
-      setOwnedTokens(ownedTokens);
-      setGuards(guardReturn);
-      setOwnedCoreAssets(ownedCoreAssets);
-      setIsAllowed(false);
-
-      let allowed = false;
-      for (const guard of guardReturn) {
-        if (guard.allowed) {
-          allowed = true;
-          break;
-        }
-      }
-
-      setIsAllowed(allowed);
-      setLoading(false);
-    };
-
-    checkEligibilityFunc();
-    // On purpose: not check for candyMachine, candyGuard, solanaTime
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [umi, checkEligibility, firstRun]);
-
-  const PageContent = () => {
-    return (
-      <>
-        <style jsx global>
-          {`
-      body {
-          background: #2d3748; 
-       }
-   `}
-        </style>
-        <Card>
-          <CardHeader>
-            <Flex minWidth='max-content' alignItems='center' gap='2'>
-              <Box>
-                <Heading size='md'>{headerText}</Heading>
-              </Box>
-              {loading ? (<></>) : (
-                <Flex justifyContent="flex-end" marginLeft="auto">
-                  <Box background={"teal.100"} borderRadius={"5px"} minWidth={"50px"} minHeight={"50px"} p={2} >
-                    <VStack >
-                      <Text fontSize={"sm"}>Available NFTs:</Text>
-                      <Text fontWeight={"semibold"}>{Number(candyMachine?.data.itemsAvailable) - Number(candyMachine?.itemsRedeemed)}/{Number(candyMachine?.data.itemsAvailable)}</Text>
-                    </VStack>
-                  </Box>
-                </Flex>
-              )}
-            </Flex>
-          </CardHeader>
-
-          <CardBody>
-            <Center>
-              <Box
-                rounded={'lg'}
-                mt={-12}
-                pos={'relative'}>
-                <Image
-                  rounded={'lg'}
-                  height={230}
-                  objectFit={'cover'}
-                  alt={"project Image"}
-                  src={image}
-                />
-              </Box>
-            </Center>
-            <Stack divider={<StackDivider />} spacing='8'>
-              {loading ? (
-                <div>
-                  <Divider my="10px" />
-                  <Skeleton height="30px" my="10px" />
-                  <Skeleton height="30px" my="10px" />
-                  <Skeleton height="30px" my="10px" />
-                </div>
-              ) : (
-                <ButtonList
-                  guardList={guards}
-                  candyMachine={candyMachine}
-                  candyGuard={candyGuard}
-                  umi={umi}
-                  ownedTokens={ownedTokens}
-                  setGuardList={setGuards}
-                  mintsCreated={mintsCreated}
-                  setMintsCreated={setMintsCreated}
-                  onOpen={onShowNftOpen}
-                  setCheckEligibility={setCheckEligibility}
-                  ownedCoreAssets={ownedCoreAssets}
-                />
-              )}
-            </Stack>
-          </CardBody>
-        </Card >
-        { umi.identity.publicKey === candyMachine?.authority ? (
-          <>
-            <Center>
-              <Button backgroundColor={"red.200"} marginTop={"10"} onClick={onInitializerOpen}>Admin Menu</Button>
-            </Center>
-            <Modal isOpen={isInitializerOpen} onClose={onInitializerClose}>
-              <ModalOverlay />
-              <ModalContent maxW="600px">
-                <ModalHeader>Initializer</ModalHeader>
-                <ModalCloseButton />
-                <ModalBody>
-                  < InitializeModal umi={umi} candyMachine={candyMachine} candyGuard={candyGuard} />
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-
-          </>)
-          :
-          (<></>)
-        }
-
-        <Modal isOpen={isShowNftOpen} onClose={onShowNftClose}>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Your minted NFT:</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <ShowNft nfts={mintsCreated} />
-            </ModalBody>
-          </ModalContent>
-        </Modal>
-      </>
-    );
-  };
-
   return (
-    <main>
-      <div className={styles.wallet}>
-        <WalletMultiButtonDynamic />
-      </div>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(to bottom, #c0c0c0, #a9a9a9)", // silver gradient
+        color: "#222",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem",
+        fontFamily: "'Bebas Neue', Arial, sans-serif", // bold, sports-style font
+        textAlign: "center",
+      }}
+    >
+      <Head>
+        <title>Breakaway Rush</title>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
 
-      <div className={styles.center}>
-        <PageContent key="content" />
-      </div>
-    </main>
+      {/* Logo */}
+      <Image src="/logo.png" alt="Breakaway Rush" width={320} height={130} />
+
+      {/* Header */}
+      <h1
+        style={{
+          fontSize: "3rem",
+          color: "#1a1a1a",
+          marginTop: "1rem",
+          letterSpacing: "2px",
+          textShadow: "2px 2px 5px rgba(0,0,0,0.3)",
+        }}
+      >
+        BREAKAWAY RUSH – FIRST EDITION SEASON 0
+      </h1>
+
+      {/* Mint Counter (LED style scoreboard) */}
+      <p
+        style={{
+          marginTop: "1rem",
+          fontSize: "2.2rem",
+          fontFamily: "'Orbitron', monospace", // digital scoreboard look
+          fontWeight: "700",
+          color: "#1e90ff", // blue LED text
+          background: "#001f3f", // dark navy background
+          padding: "0.75rem 1.5rem",
+          borderRadius: "10px",
+          display: "inline-block",
+          boxShadow: "0px 0px 20px rgba(30, 144, 255, 0.9)", // neon blue glow
+          border: "2px solid #1e90ff",
+        }}
+      >
+        14 of 700 minted
+      </p>
+
+      {/* Break Button (buzzer style) */}
+      <button
+        style={{
+          marginTop: "2rem",
+          padding: "1rem 2.5rem",
+          fontSize: "1.5rem",
+          fontWeight: "bold",
+          color: "#fff",
+          backgroundColor: "#d62828",
+          border: "3px solid #111",
+          borderRadius: "12px",
+          cursor: "pointer",
+          textTransform: "uppercase",
+          boxShadow: "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)",
+          transition: "all 0.3s ease-in-out",
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.backgroundColor = "#ff0000";
+          e.currentTarget.style.boxShadow =
+            "0px 0px 30px rgba(255,0,0,1), 0px 0px 60px rgba(255,0,0,0.8)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.backgroundColor = "#d62828";
+          e.currentTarget.style.boxShadow =
+            "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)";
+        }}
+        onClick={() => alert("Break function will trigger minting here.")}
+      >
+        BREAK
+      </button>
+    </div>
   );
 }
