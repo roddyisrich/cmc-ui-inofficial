@@ -1,7 +1,20 @@
 import Head from "next/head";
 import Image from "next/image";
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 export default function Home() {
+  const { connected, publicKey } = useWallet();
+
+  const handleBreak = () => {
+    if (!connected) {
+      alert("Please connect your wallet first!");
+      return;
+    }
+    // Add your minting logic here
+    alert(`Break function will trigger minting for wallet: ${publicKey?.toString().slice(0, 8)}...`);
+  };
+
   return (
     <div
       style={{
@@ -25,6 +38,19 @@ export default function Home() {
         />
       </Head>
 
+      {/* Wallet Connection Button */}
+      <div style={{ position: "absolute", top: "20px", right: "20px" }}>
+        <WalletMultiButton 
+          style={{
+            backgroundColor: connected ? "#28a745" : "#007bff",
+            fontSize: "14px",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            fontFamily: "'Bebas Neue', Arial, sans-serif",
+          }}
+        />
+      </div>
+
       {/* Logo */}
       <Image src="/logo.png" alt="Breakaway Rush" width={320} height={130} />
 
@@ -40,6 +66,20 @@ export default function Home() {
       >
         BREAKAWAY RUSH – FIRST EDITION SEASON 0
       </h1>
+
+      {/* Wallet Status */}
+      {connected && (
+        <p
+          style={{
+            marginTop: "1rem",
+            fontSize: "1rem",
+            color: "#28a745",
+            fontWeight: "bold",
+          }}
+        >
+          Wallet Connected: {publicKey?.toString().slice(0, 8)}...
+        </p>
+      )}
 
       {/* Mint Counter (LED style scoreboard) */}
       <p
@@ -57,7 +97,7 @@ export default function Home() {
           border: "2px solid #1e90ff",
         }}
       >
-        14 of 700 minted
+        14 of 108 minted
       </p>
 
       {/* Break Button (buzzer style) */}
@@ -68,27 +108,35 @@ export default function Home() {
           fontSize: "1.5rem",
           fontWeight: "bold",
           color: "#fff",
-          backgroundColor: "#d62828",
+          backgroundColor: connected ? "#d62828" : "#666",
           border: "3px solid #111",
           borderRadius: "12px",
-          cursor: "pointer",
+          cursor: connected ? "pointer" : "not-allowed",
           textTransform: "uppercase",
-          boxShadow: "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)",
+          boxShadow: connected 
+            ? "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)"
+            : "0px 4px 10px rgba(0,0,0,0.3)",
           transition: "all 0.3s ease-in-out",
+          opacity: connected ? 1 : 0.6,
         }}
         onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = "#ff0000";
-          e.currentTarget.style.boxShadow =
-            "0px 0px 30px rgba(255,0,0,1), 0px 0px 60px rgba(255,0,0,0.8)";
+          if (connected) {
+            e.currentTarget.style.backgroundColor = "#ff0000";
+            e.currentTarget.style.boxShadow =
+              "0px 0px 30px rgba(255,0,0,1), 0px 0px 60px rgba(255,0,0,0.8)";
+          }
         }}
         onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = "#d62828";
-          e.currentTarget.style.boxShadow =
-            "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)";
+          if (connected) {
+            e.currentTarget.style.backgroundColor = "#d62828";
+            e.currentTarget.style.boxShadow =
+              "0px 4px 10px rgba(0,0,0,0.6), 0px 0px 20px rgba(214,40,40,0.9)";
+          }
         }}
-        onClick={() => alert("Break function will trigger minting here.")}
+        onClick={handleBreak}
+        disabled={!connected}
       >
-        BREAK
+        {connected ? "BREAK" : "CONNECT WALLET TO BREAK"}
       </button>
     </div>
   );
